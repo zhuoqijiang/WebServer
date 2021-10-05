@@ -1,8 +1,13 @@
+项目是由C++编写的网络库
+
 环境 
+
 version
-Linux version 4.15.0-118-generic (buildd@lgw01-amd64-039) (gcc version 7.5.0 (Ubuntu 7.5.0-3ubuntu1~18.04))
-需要下载cmake 
+Linux version 4.15.0-118-generic (buildd@lgw01-amd64-039) (gcc version 7.5.0 (Ubuntu 7.5.0-3ubuntu1~18.04)) 
+
+
 使用步骤，
+需要下载cmake,make,g++.
 在当前目录即CMakeLists.txt所在目录中，
 执行
 #####
@@ -16,7 +21,12 @@ make
 ./WebServer
 
 #####
+
+
 需要加入的html，需要放在html文件里面，目前只支持GET模式。
+
+
+
 工作流程
 （1）主线程解析命令行参数（子线程开启个数（默认为1），指定端口（默认为80），指定文件输出路径（默认当前位置log.txt））
 （2）主线程负责监听端口，当全连接队列有事件到达时（三次握手完成)，会唤醒主线程以边缘触发非阻塞的方式对事件进行accept，对得到的文件描述符分配HttpData，并以轮询的方式分配给子线程（尽量达到负载均衡）
@@ -24,13 +34,18 @@ make
 
 子线程和主线程都有注册定时器，主线程的定时器关注的是将旧日志数据队列加入到主日志数据队列（双队列缓冲），子线程的定时器关注的是连接对象的连接时间，定时将过期连接对象进行清除。 定时器默认每5秒唤醒一次
 
+
+
 日志系统
 日志的等级有4个等级，分别为DEBUG,INFO,WARN,ERROR，日志可以选择向控制台和文件进行输出，（日志内容包含所在函数，行数，时间，时间戳，内容等）。
 由于对文件的读写涉及到磁盘，而对磁盘的操作速度是远小于内存的，所以采用异步的方式对日志进行写入，日志开启时会开启一个线程池（只开启一个线程），每append一条日志，其实是将日志的格式LogEvent添加到线程池二级缓冲队列，当二级缓冲队列收集到100个LogEvent时会将此队列加入到一级队列当中，此时会唤醒线程池的线程对其进行读写，二级缓冲队列的目的是防止频繁的唤醒线程池里的线程。但是这样会导致未满100个logEvent的队列里的数据无法写入磁盘，所以主线程会定时的将二级缓冲队列的内容加入一级缓冲队列。
 
+
+
+
 网络部分的结构主要有：
-1.Epoll：linux上主要的io多路复用方式有select，poll，epoll，而epoll的平均效率是最高的，所以采用epoll的方式来对事件进行监听从而实现一个线程能同时监听多个对象
-2.Channel：（Acceptor，HttpData，TimerQueue）括号里的的结构会注册Channel的readcallback，closecallback，writecallback，连接对象均需要通过设置Channel才能将其加入epoll中，Channel是对象与epoll交流的中介，Channel管理着事件所注册的状态，文件描述符等，是很重要的结构。
-3.EventLoop：是整个框架的核心，由于框架采用one loop per thread 的思想，所以每个线程都有一个Eventloop结构，Eventloop控制着一个线程的所有活动。每当poll有事件返回时，loop都会唤醒执行channel的handleEvent函数，由于程序一直运行着所以结构中的函数loop是个死循环
+（1）Epoll：linux上主要的io多路复用方式有select，poll，epoll，而epoll的平均效率是最高的，所以采用epoll的方式来对事件进行监听从而实现一个线程能同时监听多个对象
+（2）Channel：（Acceptor，HttpData，TimerQueue）括号里的的结构会注册Channel的readcallback，closecallback，writecallback，连接对象均需要通过设置Channel才能将其加入epoll中，Channel是对象与epoll交流的中介，Channel管理着事件所注册的状态，文件描述符等，是很重要的结构。
+（3）EventLoop：是整个框架的核心，由于框架采用one loop per thread 的思想，所以每个线程都有一个Eventloop结构，Eventloop控制着一个线程的所有活动。每当poll有事件返回时，loop都会唤醒执行channel的handleEvent函数，由于程序一直运行着所以结构中的函数loop是个死循环
 
 
